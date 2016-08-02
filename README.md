@@ -9,7 +9,7 @@
 * Uses ES6 Promises and [Bluebird](https://github.com/petkaantonov/bluebird/)
 * Includes [Pokémon Trainer Club](https://www.pokemon.com/en/pokemon-trainer-club) and Google login clients
 * Optional batch mode to group several requests in one RPC call
-* Automatically retries failed API requests with increasing delay
+* Automatic request throttling
 
 ## Acknowledgements
 * Uses the excellent [POGOProtos](https://github.com/AeonLucid/POGOProtos) (via [node-pogo-protos](https://github.com/cyraxx/node-pogo-protos))
@@ -123,12 +123,12 @@ Clears the list of batched requests and aborts batch mode.
 #### `batchCall()` ⇒ <code>Promise</code>
 Executes any batched requests.
 
-#### `setMaxTries(maxTries)`
-Sets the maximum times to try RPC calls until they succeed (default is 5 tries). Set to 1 to disable retry logic.
+#### `setThrottleDelay(delayMs)`
+Sets the minimum time between API requests (500 ms by default).
 
-| Param | Type |
-| --- | --- |
-| maxTries | <code>integer</code> |
+| Param | Type | Description |
+| --- | --- | --- |
+| delayMs | <code>integer</code> | Time in ms, or 0 to turn off throttling |
 
 #### `setProxy(proxy)`
 Sets a proxy address to use for the HTTPS RPC requests.

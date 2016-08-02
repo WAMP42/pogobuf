@@ -4,16 +4,15 @@ const crypto = require('crypto'),
     EventEmitter = require('events').EventEmitter,
     Long = require('long'),
     POGOProtos = require('node-pogo-protos'),
-    Promise = require('bluebird'),
-    request = require('request'),
-    retry = require('bluebird-retry'),
-    Utils = require('./pogobuf.utils.js');
+    Utils = require('./pogobuf.utils.js'),
+    request = require('request');
 
 const RequestType = POGOProtos.Networking.Requests.RequestType,
     RequestMessages = POGOProtos.Networking.Requests.Messages,
     Responses = POGOProtos.Networking.Responses;
 
 const INITIAL_ENDPOINT = 'https://pgorelease.nianticlabs.com/plfe/rpc';
+const THROTTLE_MS_DEFAULT = 500;
 
 /**
  * Pokémon Go RPC client.
@@ -113,12 +112,11 @@ function Client() {
     };
 
     /**
-     * Sets the maximum times to try RPC calls until they succeed (default is 5 tries).
-     * Set to 1 to disable retry logic.
-     * @param {integer} maxTries
+     * Sets the minimum time between API requests (500 ms by default).
+     * @param {integer} delayMs - Time in ms, or 0 to turn off throttling
      */
-    this.setMaxTries = function(maxTries) {
-        self.maxTries = maxTries;
+    this.setThrottleDelay = function(delayMs) {
+        self.throttleDelay = delayMs;
     };
 
     /**
@@ -740,7 +738,8 @@ function Client() {
     });
 
     this.endpoint = INITIAL_ENDPOINT;
-    this.maxTries = 5;
+    this.lastRequest = 0;
+    this.throttleDelay = THROTTLE_MS_DEFAULT;
 
     /**
      * Executes a request and returns a Promise or, if we are in batch mode, adds it to the
@@ -837,24 +836,6 @@ function Client() {
     };
 
     /**
-     * Executes an RPC call with the given list of requests, retrying if necessary.
-     * @private
-     * @param {Object[]} requests - Array of requests to send
-     * @param {RequestEnvelope} [envelope] - Pre-built request envelope to use
-     * @return {Promise} - A Promise that will be resolved with the (list of) response messages,
-     *     or true if there aren't any
-     */
-    this.callRPC = function(requests, envelope) {
-        if (self.maxTries <= 1) return self.tryCallRPC(requests, envelope);
-
-        return retry(() => self.tryCallRPC(requests, envelope), {
-            interval: 300,
-            backoff: 2,
-            max_tries: self.maxTries
-        });
-    };
-
-    /**
      * Executes an RPC call with the given list of requests.
      * @private
      * @param {Object[]} requests - Array of requests to send
@@ -862,7 +843,7 @@ function Client() {
      * @return {Promise} - A Promise that will be resolved with the (list of) response messages,
      *     or true if there aren't any
      */
-    this.tryCallRPC = function(requests, envelope) {
+    this.callRPC = function(requests, envelope) {
         return new Promise((resolve, reject) => {
             if (!envelope) {
                 try {
@@ -871,6 +852,17 @@ function Client() {
                     reject(e);
                     return;
                 }
+            }
+
+            if (self.throttleDelay && self.endpoint !== INITIAL_ENDPOINT) {
+                var sinceLastRequest = Date.now() - self.lastRequest;
+                if (sinceLastRequest < self.throttleDelay) {
+                    setTimeout(() => resolve(self.callRPC(requests, envelope)), self.throttleDelay -
+                        sinceLastRequest);
+                    return;
+                }
+
+                self.lastRequest = Date.now();
             }
 
             self.request({
