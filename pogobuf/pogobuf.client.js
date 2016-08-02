@@ -897,7 +897,7 @@ function Client() {
                     if (e.decoded) {
                         responseEnvelope = e.decoded;
                     } else {
-                        reject(new retry.StopError(e));
+                        reject(e);
                         return;
                     }
                 }
@@ -905,7 +905,7 @@ function Client() {
                 self.emit('raw-response', responseEnvelope);
 
                 if (responseEnvelope.error) {
-                    reject(new retry.StopError(responseEnvelope.error));
+                    reject(Error(responseEnvelope.error));
                     return;
                 }
 
@@ -937,13 +937,6 @@ function Client() {
                     return;
                 }
 
-                /* These codes indicate invalid input, no use in retrying so throw StopError */
-                if (responseEnvelope.status_code === 3 || responseEnvelope.status_code === 102) {
-                    reject(new retry.StopError(
-                        `Status code ${responseEnvelope.status_code} received from RPC`));
-                }
-
-                /* These can be temporary so throw regular Error */
                 if (responseEnvelope.status_code !== 2 && responseEnvelope.status_code !== 1) {
                     reject(Error(`Status code ${responseEnvelope.status_code} received from RPC`));
                     return;
@@ -965,7 +958,7 @@ function Client() {
                             responseMessage = requests[i].responseType.decode(responseEnvelope.returns[i]);
                         } catch (e) {
                             self.emit('parse-response-error', responseEnvelope.returns[i].toBuffer(), e);
-                            reject(new retry.StopError(e));
+                            reject(e);
                             return;
                         }
 
